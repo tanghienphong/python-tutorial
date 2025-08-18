@@ -1,0 +1,3 @@
+OPENAI_API_KEY=
+GIT_DIFF_FILE=git_diff.txt
+PHP_SYMFONY_CODE_REVIEW_CHECKLIST=php_symfony_code_review_checklist.txt

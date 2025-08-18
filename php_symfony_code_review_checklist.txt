@@ -1,0 +1,45 @@
+# PHP & Symfony Code Review Checklist
+
+## 1. PHP General Conventions (PSR-12)
+- Use full opening tag <?php, avoid short tags <?.
+- Use 4 spaces per indentation level (no tabs).
+- File ends with a blank line.
+- One class per file.
+- Namespace declaration at the top.
+- One 'use' statement per line.
+- Variable & function names in camelCase.
+- Class names in PascalCase.
+- Constants in UPPER_SNAKE_CASE.
+- Type hint all functions and properties.
+- Use null coalescing (??) where appropriate.
+- Avoid global variables and magic numbers.
+- Avoid long functions (>40 lines).
+- Avoid 'exit()', 'die()' in production.
+
+## 2. Symfony Conventions
+- Controllers in src/Controller.
+- Services in src/Service.
+- Entities in src/Entity.
+- Templates in templates/.
+- Routes defined via #[Route(...)] attributes (Symfony 6+).
+- Controller method should not contain business logic.
+- Service dependencies should be injected via constructor.
+- Avoid injecting ContainerInterface.
+- Prefer attribute-based routing, validation, ORM mapping.
+
+## 3. Doctrine ORM (Entity)
+- Entity classes follow naming conventions.
+- Use #[ORM\Column] attributes.
+- Use nullable, type, and unique constraints correctly.
+- Use getters/setters consistently.
+
+## 4. Twig Templates
+- Avoid PHP-like logic in Twig.
+- Use includes and embeds to organize templates.
+- Use 'trans' for translations.
+
+## 5. Tools Suggested
+- PHP_CodeSniffer (PSR-12, Symfony ruleset)
+- PHP-CS-Fixer (auto fix)
+- PHPStan or Psalm (static analysis)
+- Symfony Insight (Symfony best practices)

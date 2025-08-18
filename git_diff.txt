@@ -1,0 +1,730 @@
+diff --git a/app/DoctrineMigrations/Version20250806144849.php b/app/DoctrineMigrations/Version20250806144849.php
+new file mode 100644
+index 0000000000..fd600afac7
+--- /dev/null
++++ b/app/DoctrineMigrations/Version20250806144849.php
+@@ -0,0 +1,48 @@
++<?php
++
++declare (strict_types = 1);
++
++namespace DoctrineMigrations;
++
++use Doctrine\DBAL\Schema\Schema;
++use Doctrine\Migrations\AbstractMigration;
++
++/**
++ * Auto-generated Migration: Please modify to your needs!
++ */
++final class Version20250806144849 extends AbstractMigration
++{
++    public function getDescription(): string
++    {
++        return '';
++    }
++
++    public function up(Schema $schema): void
++    {
++        $count = $this->connection->fetchOne("SELECT COUNT(*) FROM dtb_page WHERE url = 'mypage_store_inventory'");
++        if ($count > 0) {
++            return;
++        }
++        $pageId = $this->connection->fetchOne('SELECT MAX(id) FROM dtb_page');
++        $sortNo = $this->connection->fetchOne('SELECT MAX(sort_no) FROM dtb_page_layout');
++
++        $pageId++;
++        $this->addSql("INSERT INTO dtb_page (
++            id, master_page_id, page_name, url, file_name, edit_type, create_date, update_date, meta_robots
++        ) VALUES(
++            $pageId, 5, 'MYページ/店舗在庫検索', 'mypage_store_inventory', 'Mypage/store_inventory', 3, now(), now(), 'noindex'
++        )");
++
++        $sortNo++;
++        $this->addSql("INSERT INTO dtb_page_layout (page_id, layout_id, sort_no) VALUES ($pageId, 2, $sortNo)");
++    }
++
++    public function down(Schema $schema): void
++    {
++        $pageId = $this->connection->fetchOne("SELECT id FROM dtb_page WHERE url = 'mypage_store_inventory'");
++        if ($pageId) {
++            $this->addSql("DELETE FROM dtb_page_layout WHERE page_id = $pageId");
++            $this->addSql("DELETE FROM dtb_page WHERE id = $pageId");
++        }
++    }
++}
+diff --git a/src/Eccube/Controller/Mypage/MypageController.php b/src/Eccube/Controller/Mypage/MypageController.php
+index 323f83bd1f..745d0b0cb7 100644
+--- a/src/Eccube/Controller/Mypage/MypageController.php
++++ b/src/Eccube/Controller/Mypage/MypageController.php
+@@ -24,7 +24,10 @@ use Eccube\Event\EventArgs;
+ use Eccube\Exception\CartException;
+ use Eccube\Form\Type\Front\CustomerLoginType;
+ use Eccube\Repository\BaseInfoRepository;
++use Eccube\Repository\CategoryRepository;
+ use Eccube\Repository\CustomerFavoriteProductRepository;
++use Eccube\Repository\Master\FormatRepository;
++use Eccube\Repository\Master\GeneralFormatRepository;
+ use Eccube\Repository\OrderRepository;
+ use Eccube\Repository\ProductRepository;
+ use Eccube\Service\CartService;
+@@ -102,6 +105,21 @@ class MypageController extends AbstractController
+      */
+     protected $pdfService;
+ 
++    /**
++     * @var CategoryRepository
++     */
++    protected $categoryRepository;
++
++    /**
++     * @var GeneralFormatRepository
++     */
++    protected $generalFormatRepository;
++
++    /**
++     * @var FormatRepository
++     */
++    protected $formatRepository;
++
+     /**
+      * MypageController constructor.
+      *
+@@ -122,19 +140,25 @@ class MypageController extends AbstractController
+         MailService $mailService,
+         ProductRepository $productRepository,
+         OrderPdfService $orderPdfService,
+-        OrderRepository $writeOrderRepository
++        OrderRepository $writeOrderRepository,
++        CategoryRepository $categoryRepository,
++        GeneralFormatRepository $generalFormatRepository,
++        FormatRepository $formatRepository
+     ) {
+-        $this->orderRepository = $__readonlyOrderRepository;
++        $this->orderRepository                   = $__readonlyOrderRepository;
+         $this->customerFavoriteProductRepository = $customerFavoriteProductRepository;
+-        $this->__readOnlyBaseInfoRepository = $__readOnlyBaseInfoRepository;
+-        $this->BaseInfo = $__readOnlyBaseInfoRepository->get();
+-        $this->cartService = $cartService;
+-        $this->purchaseFlow = $purchaseFlow;
+-        $this->orderGetApiService = $orderGetApiService;
+-        $this->mailService = $mailService;
+-        $this->productRepository = $productRepository;
+-        $this->pdfService = $orderPdfService;
+-        $this->writeOrderRepository = $writeOrderRepository;
++        $this->__readOnlyBaseInfoRepository      = $__readOnlyBaseInfoRepository;
++        $this->BaseInfo                          = $__readOnlyBaseInfoRepository->get();
++        $this->cartService                       = $cartService;
++        $this->purchaseFlow                      = $purchaseFlow;
++        $this->orderGetApiService                = $orderGetApiService;
++        $this->mailService                       = $mailService;
++        $this->productRepository                 = $productRepository;
++        $this->pdfService                        = $orderPdfService;
++        $this->writeOrderRepository              = $writeOrderRepository;
++        $this->categoryRepository                = $categoryRepository;
++        $this->generalFormatRepository           = $generalFormatRepository;
++        $this->formatRepository                  = $formatRepository;
+     }
+ 
+     /**
+@@ -183,7 +207,7 @@ class MypageController extends AbstractController
+ 
+         return [
+             'error' => $utils->getLastAuthenticationError(),
+-            'form' => $form->createView(),
++            'form'  => $form->createView(),
+         ];
+     }
+ 
+@@ -252,7 +276,7 @@ class MypageController extends AbstractController
+         }
+ 
+         return [
+-            'Order' => $Order,
++            'Order'      => $Order,
+             'stockOrder' => $stockOrder,
+         ];
+     }
+@@ -287,7 +311,7 @@ class MypageController extends AbstractController
+ 
+         $event = new EventArgs(
+             [
+-                'Order' => $Order,
++                'Order'    => $Order,
+                 'Customer' => $Customer,
+             ],
+             $request
+@@ -338,7 +362,7 @@ class MypageController extends AbstractController
+ 
+         $event = new EventArgs(
+             [
+-                'Order' => $Order,
++                'Order'    => $Order,
+                 'Customer' => $Customer,
+             ],
+             $request
+@@ -381,7 +405,7 @@ class MypageController extends AbstractController
+ 
+         $event = new EventArgs(
+             [
+-                'qb' => $qb,
++                'qb'       => $qb,
+                 'Customer' => $Customer,
+             ],
+             $request
+@@ -430,7 +454,7 @@ class MypageController extends AbstractController
+ 
+         $event = new EventArgs(
+             [
+-                'Customer' => $Customer,
++                'Customer'                => $Customer,
+                 'CustomerFavoriteProduct' => $CustomerFavoriteProduct,
+             ],
+             $request
+@@ -441,7 +465,7 @@ class MypageController extends AbstractController
+ 
+         return $this->redirect($this->generateUrl('mypage_favorite'));
+     }
+-    
++
+     /**
+      * 購入履歴詳細を表示する.
+      *
+@@ -456,40 +480,39 @@ class MypageController extends AbstractController
+     public function orders(Request $request)
+     {
+ 
+-
+         /** @var Customer $user */
+         $user = $this->getUser();
+ 
+         $listYears = $this->orderGetApiService->getListYears($user->getCreateDate());
+-        $memberId = $user->getId() ?? null;
++        $memberId  = $user->getId() ?? null;
+ 
+         $result = $this->orderGetApiService->getHistory([
+-            'membersId' => $memberId,
+-            'year' => (int)$request->get('year', date('Y')),
++            'membersId'  => $memberId,
++            'year'       => (int) $request->get('year', date('Y')),
+             'page_index' => $request->get('pageno', TsApiConstants::DEFAULT_PAGINATE_PAGE),
+         ]);
+ 
+         $konyuRirekiList = $result['data']['items'] ?? [];
+-        $tempoCodes = array_map(function ($item) {
++        $tempoCodes      = array_map(function ($item) {
+             return $item['tempoCode'] ?? null;
+         }, $konyuRirekiList);
+-        
++
+         $tempoCodes = array_unique($tempoCodes);
+ 
+         return [
+-            'list_data' => $result['data'],
+-            'year' => $request->get('year', date('Y')),
+-            'list_years' => $listYears,
++            'list_data'             => $result['data'],
++            'year'                  => $request->get('year', date('Y')),
++            'list_years'            => $listYears,
+             'list_konyuHouhouClass' => $this->konyuHouhouClassMap($tempoCodes),
+-            'list_status_code' => [
+-                TsApiConstants::KONYURIREKI_STATUS_IN_PROGESS => trans('front.mypage.order.history.status_code.10'),
+-                TsApiConstants::KONYURIREKI_STATUS_SECURED => trans('front.mypage.order.history.status_code.20'),
++            'list_status_code'      => [
++                TsApiConstants::KONYURIREKI_STATUS_IN_PROGESS             => trans('front.mypage.order.history.status_code.10'),
++                TsApiConstants::KONYURIREKI_STATUS_SECURED                => trans('front.mypage.order.history.status_code.20'),
+                 TsApiConstants::KONYURIREKI_STATUS_PREPARING_FOR_SHIPMENT => trans('front.mypage.order.history.status_code.30'),
+-                TsApiConstants::KONYURIREKI_STATUS_CANCEL_40 => trans('front.mypage.order.history.status_code.40'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_50 => trans('front.mypage.order.history.status_code.50'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_60 => trans('front.mypage.order.history.status_code.60'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_90 => trans('front.mypage.order.history.status_code.90'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_99 => trans('front.mypage.order.history.status_code.99'),
++                TsApiConstants::KONYURIREKI_STATUS_CANCEL_40              => trans('front.mypage.order.history.status_code.40'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_50             => trans('front.mypage.order.history.status_code.50'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_60             => trans('front.mypage.order.history.status_code.60'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_90             => trans('front.mypage.order.history.status_code.90'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_99             => trans('front.mypage.order.history.status_code.99'),
+             ],
+         ];
+     }
+@@ -504,7 +527,7 @@ class MypageController extends AbstractController
+         $baseInfors = $this->__readOnlyBaseInfoRepository->getWithCompanyCode($tempoCode);
+ 
+         $data = [
+-            TsApiConstants::KONYUHOUHOUCLASS_NET_MAIL_ORDER => trans('front.mypage.order.history.konyuHouhouClass.2.or.3'),
++            TsApiConstants::KONYUHOUHOUCLASS_NET_MAIL_ORDER   => trans('front.mypage.order.history.konyuHouhouClass.2.or.3'),
+             TsApiConstants::KONYUHOUHOUCLASS_STORE_MAIL_ORDER => trans('front.mypage.order.history.konyuHouhouClass.2.or.3'),
+         ];
+         foreach ($baseInfors as $baseInfo) {
+@@ -522,11 +545,11 @@ class MypageController extends AbstractController
+     {
+         $this->isTokenValid();
+ 
+-        $receiptName = $request->get('receipt_name', '');
+-        $methodPayment = trans('front.mypage.order.history.detail.method_payment.'. $request->get('shiharaiMethod'));
++        $receiptName   = $request->get('receipt_name', '');
++        $methodPayment = trans('front.mypage.order.history.detail.method_payment.' . $request->get('shiharaiMethod'));
+ 
+         $this->validateReceiptName($request, $validator);
+-        
++
+         /**
+          * @var Order $order
+          */
+@@ -538,9 +561,9 @@ class MypageController extends AbstractController
+         );
+ 
+         if (! $this->pdfService->checkAllowPdf($request->get('dempyo_no'), $request->get('ryoshushoClass'))) {
+-            
++
+             return $this->redirect($this->generateUrl('mypage_order_detail', [
+-                'dempyoNo' => $request->get('dempyo_no'),
++                'dempyoNo'         => $request->get('dempyo_no'),
+                 'konyuHouhouClass' => $request->get('ryoshushoClass'),
+             ]));
+         }
+@@ -557,27 +580,27 @@ class MypageController extends AbstractController
+         }
+ 
+         // PDFの生成
+-       $pdf = $this->pdfService->renderOrderDataToPdf(
+-           [
+-                'isFirst' => !empty($receipteIssuedDate) ? false : true,
+-                'receipt_issued_date' => !empty($receipteIssuedDate) ? $receipteIssuedDate->format('Y/m/d') : date('Y/m/d'),
+-                'now' => date('Y/m/d'),
+-                'order_no' => $request->get('dempyo_no'),
+-                'price_tax_included_8' => number_format($request->get('totalAmountR')),
+-                'domestic_consumption_tax_8' => number_format($request->get('totalRedTax')),
+-                'price_tax_included_10' => number_format($request->get('totalAmountTax')),
++        $pdf = $this->pdfService->renderOrderDataToPdf(
++            [
++                'isFirst'                     => ! empty($receipteIssuedDate) ? false : true,
++                'receipt_issued_date'         => ! empty($receipteIssuedDate) ? $receipteIssuedDate->format('Y/m/d') : date('Y/m/d'),
++                'now'                         => date('Y/m/d'),
++                'order_no'                    => $request->get('dempyo_no'),
++                'price_tax_included_8'        => number_format($request->get('totalAmountR')),
++                'domestic_consumption_tax_8'  => number_format($request->get('totalRedTax')),
++                'price_tax_included_10'       => number_format($request->get('totalAmountTax')),
+                 'domestic_consumption_tax_10' => number_format($request->get('totalTax')),
+-                'name' => $receiptName,
+-                'nohinshoNo' => $request->get('nohinshoNo') ?? '',
+-                'total' => number_format($request->get('totalAmountIncTax')),
+-                'shiharaiMethod' => $methodPayment,
++                'name'                        => $receiptName,
++                'nohinshoNo'                  => $request->get('nohinshoNo') ?? '',
++                'total'                       => number_format($request->get('totalAmountIncTax')),
++                'shiharaiMethod'              => $methodPayment,
+             ]
+-       );
++        );
+ 
+         return new Response(
+             $pdf,
+             200,
+-            ['content-type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="order.pdf"',],
++            ['content-type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="order.pdf"'],
+         );
+     }
+ 
+@@ -595,21 +618,21 @@ class MypageController extends AbstractController
+     {
+ 
+         $receiptName = trim($request->get('receipt_name', ''));
+-        $validator = $validator->validate($receiptName, [
++        $validator   = $validator->validate($receiptName, [
+             new Assert\NotBlank(),
+             new Assert\Length(['max' => 30]),
+         ]);
+-       if (count($validator) > 0) {
++        if (count($validator) > 0) {
+             return $this->redirect($this->generateUrl('mypage_order_detail', [
+-                    'dempyoNo' => $request->get('dempyo_no'),
+-                    'konyuHouhouClass' => $request->get('ryoshushoClass'),
++                'dempyoNo'         => $request->get('dempyo_no'),
++                'konyuHouhouClass' => $request->get('ryoshushoClass'),
+             ]));
+-       }
++        }
+ 
+-       return null;
++        return null;
+     }
+ 
+-     /**
++    /**
+      * Order Detail.
+      *
+      * @Route("/mypage/orders/{dempyoNo}/{konyuHouhouClass}", name="mypage_order_detail", methods={"GET"})
+@@ -624,41 +647,41 @@ class MypageController extends AbstractController
+     public function orderDetail(string $dempyoNo, int $konyuHouhouClass)
+     {
+         /** @var Customer $user */
+-        $user = $this->getUser();
++        $user     = $this->getUser();
+         $memberId = $user->getId() ?? null;
+-        $detail = $this->orderGetApiService->getOrderDetail([
+-            'dempyoNo' => $dempyoNo,
++        $detail   = $this->orderGetApiService->getOrderDetail([
++            'dempyoNo'         => $dempyoNo,
+             'konyuHouhouClass' => $konyuHouhouClass,
+-            'membersId' => $memberId,
++            'membersId'        => $memberId,
+         ]);
+-        
++
+         $data = $detail['konyuRireMeisaikiList'] ?? [];
+ 
+-        $shohinCodes = $this->orderGetApiService->getListShohinCode($data);
+-        $images = $this->productRepository->getImagesWithShohinCodes($shohinCodes);
+-        $firstData = $data[0] ?? [];
++        $shohinCodes      = $this->orderGetApiService->getListShohinCode($data);
++        $images           = $this->productRepository->getImagesWithShohinCodes($shohinCodes);
++        $firstData        = $data[0] ?? [];
+         $checkAllowCancel = $this->orderGetApiService->checkCancel($firstData['juchuDate'], $firstData['statusCode']);
+-        $checkAllowPdf = $this->pdfService->checkAllowPdf($dempyoNo, $detail['ryoshushoClass']);
++        $checkAllowPdf    = $this->pdfService->checkAllowPdf($dempyoNo, $detail['ryoshushoClass']);
+ 
+         return [
+-            'detail' => $detail,
+-            'dempyoNo' => $dempyoNo,
+-            'konyuHouhouClass' => $konyuHouhouClass,
++            'detail'                => $detail,
++            'dempyoNo'              => $dempyoNo,
++            'konyuHouhouClass'      => $konyuHouhouClass,
+             'list_konyuHouhouClass' => $this->konyuHouhouClassMap([$firstData['tempoCode']]),
+-            'images' => $images,
+-            'check_allow_cancel' => $checkAllowCancel,
+-            'check_allow_pdf' => $checkAllowPdf,
+-            'user' => $user,
+-            'first_data' => $firstData,
+-            'list_status_code' => [
+-                TsApiConstants::KONYURIREKI_STATUS_IN_PROGESS => trans('front.mypage.order.history.status_code.10'),
+-                TsApiConstants::KONYURIREKI_STATUS_SECURED => trans('front.mypage.order.history.status_code.20'),
++            'images'                => $images,
++            'check_allow_cancel'    => $checkAllowCancel,
++            'check_allow_pdf'       => $checkAllowPdf,
++            'user'                  => $user,
++            'first_data'            => $firstData,
++            'list_status_code'      => [
++                TsApiConstants::KONYURIREKI_STATUS_IN_PROGESS             => trans('front.mypage.order.history.status_code.10'),
++                TsApiConstants::KONYURIREKI_STATUS_SECURED                => trans('front.mypage.order.history.status_code.20'),
+                 TsApiConstants::KONYURIREKI_STATUS_PREPARING_FOR_SHIPMENT => trans('front.mypage.order.history.status_code.30'),
+-                TsApiConstants::KONYURIREKI_STATUS_CANCEL_40 => trans('front.mypage.order.history.status_code.40'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_50 => trans('front.mypage.order.history.status_code.50'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_60 => trans('front.mypage.order.history.status_code.60'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_90 => trans('front.mypage.order.history.status_code.90'),
+-                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_99 => trans('front.mypage.order.history.status_code.99'),
++                TsApiConstants::KONYURIREKI_STATUS_CANCEL_40              => trans('front.mypage.order.history.status_code.40'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_50             => trans('front.mypage.order.history.status_code.50'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_60             => trans('front.mypage.order.history.status_code.60'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_90             => trans('front.mypage.order.history.status_code.90'),
++                TsApiConstants::KONYURIREKI_STATUS_SHIPPED_99             => trans('front.mypage.order.history.status_code.99'),
+             ],
+         ];
+     }
+@@ -673,17 +696,17 @@ class MypageController extends AbstractController
+     public function validateCancelData(Request $request, ValidatorInterface $validator): mixed
+     {
+         $cancelItems = $request->get('cancel_items', []);
+-        
++
+         $constraints = new Assert\All([
+             new Assert\Collection([
+-                'fields' => [
+-                    'title' => [
++                'fields'           => [
++                    'title'      => [
+                         new Assert\NotBlank(),
+                     ],
+-                    'artist' => [
++                    'artist'     => [
+                         new Assert\NotBlank(),
+                     ],
+-                    'barCode' => [
++                    'barCode'    => [
+                         new Assert\NotBlank(),
+                     ],
+                     'juchuCount' => [
+@@ -717,83 +740,83 @@ class MypageController extends AbstractController
+         $this->isTokenValid();
+         /** @var Customer $user */
+         $user = $this->getUser();
+-    
+-        $cancelReasons = $request->get('cancel_reason', []);
++
++        $cancelReasons     = $request->get('cancel_reason', []);
+         $translatedReasons = array_map(function ($reason) {
+             return trans('front.mypage.order.history.detail.cancel_reason_' . $reason);
+         }, $cancelReasons);
+         $cancelItems = $request->get('cancel_items', []);
+-        
++
+         $validate = $this->validateCancelData($request, $validator);
+         if (count($cancelItems) === 0 || ! empty($validate)) {
+-            
++
+             return $this->json(
+                 [
+                     'success' => false,
+                     'message' => trans('front.mypage.order.history.detail.valdate.item'),
+-            ],
++                ],
+                 200,
+                 []
+             );
+         }
+ 
+-        $customerCancelMail = env('CUSTOMER_CANCEL_MAIL', 'onlineshop@diskunion.co.jp');
++        $customerCancelMail  = env('CUSTOMER_CANCEL_MAIL', 'onlineshop@diskunion.co.jp');
+         $diskUnionCancelMail = env('DISK_UNION_CANCEL_MAIL', 'cancel@diskunion.co.jp');
+ 
+         if ($request->get('type') == TsApiConstants::CANCEL_ALL) {
+ 
+             $this->mailService->sendMailCancelOrder(
+                 [
+-                    'name' => $user->getKana02(),
++                    'name'       => $user->getKana02(),
+                     'from_email' => $customerCancelMail,
+-                    'email' => $user->getEmail(),
+-                    'dempyoNo' => $request->get('dempyoNo', ''),
++                    'email'      => $user->getEmail(),
++                    'dempyoNo'   => $request->get('dempyoNo', ''),
+                 ],
+                 $this->eccubeConfig['eccube_cancel_order_template_id']
+             );
+             $this->mailService->sendMailCancelOrder(
+                 [
+-                    'name' => $user->getKana02(),
+-                    'email' => $diskUnionCancelMail,
+-                    'from_email' => $diskUnionCancelMail,
+-                    'dempyoNo' => $request->get('dempyoNo', ''),
+-                    'items' => $cancelItems,
+-                    'reasons' => $translatedReasons,
++                    'name'         => $user->getKana02(),
++                    'email'        => $diskUnionCancelMail,
++                    'from_email'   => $diskUnionCancelMail,
++                    'dempyoNo'     => $request->get('dempyoNo', ''),
++                    'items'        => $cancelItems,
++                    'reasons'      => $translatedReasons,
+                     'reason_other' => $request->get('cancel_text', ''),
+                 ],
+                 $this->eccubeConfig['du_eccube_cancel_order_template_id']
+             );
+         } else {
+-            
++
+             $this->mailService->sendMailCancelOrder(
+                 [
+-                    'name' => $user->getKana02(),
++                    'name'       => $user->getKana02(),
+                     'from_email' => $customerCancelMail,
+-                    'email' => $user->getEmail(),
+-                    'dempyoNo' => $request->get('dempyoNo', ''),
+-                    'items' => $cancelItems,
++                    'email'      => $user->getEmail(),
++                    'dempyoNo'   => $request->get('dempyoNo', ''),
++                    'items'      => $cancelItems,
+                 ],
+                 $this->eccubeConfig['eccube_cancel_order_each_product_template_id']
+             );
+             $this->mailService->sendMailCancelOrder(
+                 [
+-                    'name' => $user->getKana02(),
+-                    'from_email' => $customerCancelMail,
+-                    'email' => $diskUnionCancelMail,
+-                    'dempyoNo' => $request->get('dempyoNo', ''),
+-                    'items' => $cancelItems,
+-                    'reasons' => $translatedReasons,
++                    'name'         => $user->getKana02(),
++                    'from_email'   => $customerCancelMail,
++                    'email'        => $diskUnionCancelMail,
++                    'dempyoNo'     => $request->get('dempyoNo', ''),
++                    'items'        => $cancelItems,
++                    'reasons'      => $translatedReasons,
+                     'reason_other' => $request->get('cancel_text', ''),
+                 ],
+                 $this->eccubeConfig['du_eccube_cancel_order_each_product_template_id']
+             );
+         }
+-        
++
+         $data = ['success' => true];
+ 
+         return $this->json($data, 200, []);
+     }
+-    
++
+     /**
+      * 購入履歴詳細を表示する.
+      *
+@@ -808,7 +831,7 @@ class MypageController extends AbstractController
+     public function purchaseHistory(Request $request)
+     {
+         /** @var Customer $user */
+-        $user = $this->getUser();
++        $user     = $this->getUser();
+         $memberId = $user->getId() ?? null;
+ 
+         $result = $this->orderGetApiService->getPurchaseHistory([
+@@ -818,24 +841,24 @@ class MypageController extends AbstractController
+         if ($result['status'] == TsApiConstants::RESPONSE_STATUS_FAIL) {
+             return [
+                 'status' => $result['status'],
+-                'error' => $result['message'],
++                'error'  => $result['message'],
+             ];
+         }
+ 
+         $kaitoriRirekiList = $result['data']['kaitoriRirekiList'] ?? [];
+-        $tempoCodes = array_map(function ($item) {
++        $tempoCodes        = array_map(function ($item) {
+             return $item['tempoCode'] ?? null;
+         }, $kaitoriRirekiList);
+         $tempoCodes = array_unique($tempoCodes);
+-       
++
+         return [
+-            'status' => $result['status'],
+-            'list_data' => $result['data'],
+-            'total_items' => count($kaitoriRirekiList),
++            'status'                => $result['status'],
++            'list_data'             => $result['data'],
++            'total_items'           => count($kaitoriRirekiList),
+             'list_konyuHouhouClass' => $this->konyuHouhouClassMap($tempoCodes),
+         ];
+     }
+-    
++
+     /**
+      * Purchase Detail.
+      *
+@@ -850,37 +873,114 @@ class MypageController extends AbstractController
+     public function purchaseDetail(Request $request, string $id)
+     {
+         /** @var Customer $user */
+-        $user = $this->getUser();
++        $user     = $this->getUser();
+         $memberId = $user->getId() ?? null;
+-        $detail = $this->orderGetApiService->getPurchaseDetail([
++        $detail   = $this->orderGetApiService->getPurchaseDetail([
+             'sateiUketsukeNo' => $id,
+-            'membersId' => $memberId,
+-            'page_index' => $request->get('pageno', TsApiConstants::DEFAULT_PAGINATE_PAGE),
++            'membersId'       => $memberId,
++            'page_index'      => $request->get('pageno', TsApiConstants::DEFAULT_PAGINATE_PAGE),
+         ]);
+ 
+         if ($detail['status'] !== TsApiConstants::RESPONSE_STATUS_SUCCESS) {
+             return [
+-                'detail' => [],
+-                'error' => $detail['message'],
+-                'id' => $id,
+-                'images' => [],
+-                'user' => $user,
++                'detail'     => [],
++                'error'      => $detail['message'],
++                'id'         => $id,
++                'images'     => [],
++                'user'       => $user,
+                 'first_data' => [],
+             ];
+         }
+         $data = $detail['kaitoriRirekiMeisaiList']['items'] ?? [];
+ 
+         $shohinCodes = $this->orderGetApiService->getListShohinCode($data);
+-        $products = $this->productRepository->getProductWithShohinCodes($shohinCodes);
+-        $firstData = $data[0] ?? [];
++        $products    = $this->productRepository->getProductWithShohinCodes($shohinCodes);
++        $firstData   = $data[0] ?? [];
+ 
+         return [
+-            'detail' => $detail,
+-            'user' => $user,
+-            'id' => $id,
++            'detail'                => $detail,
++            'user'                  => $user,
++            'id'                    => $id,
+             'list_konyuHouhouClass' => $this->konyuHouhouClassMap([$firstData['tempoCode']]),
+-            'first_data' => $firstData,
+-            'products' => $products,
++            'first_data'            => $firstData,
++            'products'              => $products,
+         ];
+     }
++
++    /**
++     * 店舗在庫検索
++     *
++     * @Route("/mypage/store/inventory", name="mypage_store_inventory", methods={"GET"})
++     *
++     * @Template("Mypage/store_inventory.twig")
++     *
++     * @param Request $request
++     *
++     * @return array<string,mixed>
++     */
++    public function storeInventory(Request $request)
++    {
++        // Get categories for the filter
++        $categories = $this->categoryRepository->getList(null, true);
++
++        // Convert Doctrine objects to arrays if needed
++        $categoriesArray = array_map(function ($cat) {
++            return [
++                'id'        => $cat->getId(),
++                'parent_id' => $cat->getParent() ? $cat->getParent()->getId() : null,
++                'name'      => $cat->getName(),
++                'level'     => $cat->getHierarchy(),
++                // add other fields as needed
++            ];
++        }, $categories);
++
++        $categoryTree = $this->buildCategoryTree($categoriesArray);
++
++        // Get General Format for the filter
++        $generalFormats = $this->generalFormatRepository->findAll();
++
++        // Get Format for the filter
++        $formats = $this->formatRepository->findAll();
++
++        // combine general formats and formats
++        $formatList = [];
++        foreach ($generalFormats as $generalFormat) {
++            $formatList[] = [
++                'id'       => $generalFormat->getId(),
++                'name'     => $generalFormat->getName(),
++                'level'    => 1,
++                'children' => array_filter($formats, function ($format) use ($generalFormat) {
++                    return $format->getGeneralFormat() && $format->getGeneralFormat()->getId() === $generalFormat->getId();
++                }),
++            ];
++        }
++
++        // Return the categories and the category tree
++        return [
++            'categoryTree' => $categoryTree,
++            'formatList'   => $formatList,
++        ];
++    }
++
++    /**
++     * Build Category Tree.
++     *
++     * @param array $categories
++     * @param int|null $parentId
++     * @return array
++     */
++    protected function buildCategoryTree(array $categories, $parentId = null)
++    {
++        $branch = [];
++        foreach ($categories as $category) {
++            if ($category['parent_id'] === $parentId) {
++                $children = $this->buildCategoryTree($categories, $category['id']);
++                if ($children) {
++                    $category['children'] = $children;
++                }
++                $branch[] = $category;
++            }
++        }
++        return $branch;
++    }
+ }

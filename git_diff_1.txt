@@ -1,0 +1,1307 @@
+diff --git a/platform/core/acl/database/factories/UserProfileFactory.php b/platform/core/acl/database/factories/UserProfileFactory.php
+index 654176e..bc99628 100644
+--- a/platform/core/acl/database/factories/UserProfileFactory.php
++++ b/platform/core/acl/database/factories/UserProfileFactory.php
+@@ -24,14 +24,16 @@ class UserProfileFactory extends Factory
+     {
+         return [
+             // 'employee_code' => $this->faker->unique()->numerify('thk-###'),
+-            'first_name' => fake()->firstName,
+-            'last_name' => fake()->lastName,
++            // 'first_name' => fake()->firstName,
++            // 'last_name' => fake()->lastName,
+             'phone_number' => $this->generatePhoneNumber(),
+             'date_of_birth' => fake()->date('Y-m-d', '2000-01-01'),
+             'gender' => fake()->numberBetween(0, 1),
+             'avatar_url' => fake()->imageUrl(200, 200),
+             'locale' => fake()->numberBetween(0, 1),
+             'address' => fake()->address,
++            'bio' => fake()->paragraph,
++            'position' => fake()->jobTitle,
+         ];
+     }
+ 
+diff --git a/platform/core/acl/database/migrations/2024_05_05_061101_create_permission_tables.php b/platform/core/acl/database/migrations/2024_05_05_061101_create_permission_tables.php
+index 7de9e6d..fd73f39 100644
+--- a/platform/core/acl/database/migrations/2024_05_05_061101_create_permission_tables.php
++++ b/platform/core/acl/database/migrations/2024_05_05_061101_create_permission_tables.php
+@@ -26,7 +26,8 @@ return new class extends Migration
+         }
+ 
+         Schema::create(
+-            $tableNames['permissions'], function (Blueprint $blueprint): void {
++            $tableNames['permissions'],
++            function (Blueprint $blueprint): void {
+                 $blueprint->bigIncrements('id'); // permission id
+                 $blueprint->string('name');       // For MySQL 8.0 use string('name', 125);
+                 $blueprint->string('guard_name'); // For MySQL 8.0 use string('guard_name', 125);
+@@ -37,7 +38,8 @@ return new class extends Migration
+         );
+ 
+         Schema::create(
+-            $tableNames['roles'], function (Blueprint $blueprint) use ($teams, $columnNames): void {
++            $tableNames['roles'],
++            function (Blueprint $blueprint) use ($teams, $columnNames): void {
+                 $blueprint->bigIncrements('id'); // role id
+                 if ($teams || config('permission.testing')) { // permission.testing is a fix for sqlite testing
+                     $blueprint->unsignedBigInteger($columnNames['team_foreign_key'])->nullable();
+@@ -56,7 +58,8 @@ return new class extends Migration
+         );
+ 
+         Schema::create(
+-            $tableNames['model_has_permissions'], function (Blueprint $blueprint) use ($tableNames, $columnNames, $pivotPermission, $teams): void {
++            $tableNames['model_has_permissions'],
++            function (Blueprint $blueprint) use ($tableNames, $columnNames, $pivotPermission, $teams): void {
+                 $blueprint->unsignedBigInteger($pivotPermission);
+ 
+                 $blueprint->string('model_type');
+@@ -86,7 +89,8 @@ return new class extends Migration
+         );
+ 
+         Schema::create(
+-            $tableNames['model_has_roles'], function (Blueprint $blueprint) use ($tableNames, $columnNames, $pivotRole, $teams): void {
++            $tableNames['model_has_roles'],
++            function (Blueprint $blueprint) use ($tableNames, $columnNames, $pivotRole, $teams): void {
+                 $blueprint->unsignedBigInteger($pivotRole);
+ 
+                 $blueprint->string('model_type');
+@@ -115,7 +119,8 @@ return new class extends Migration
+         );
+ 
+         Schema::create(
+-            $tableNames['role_has_permissions'], function (Blueprint $blueprint) use ($tableNames, $pivotRole, $pivotPermission): void {
++            $tableNames['role_has_permissions'],
++            function (Blueprint $blueprint) use ($tableNames, $pivotRole, $pivotPermission): void {
+                 $blueprint->unsignedBigInteger($pivotPermission);
+                 $blueprint->unsignedBigInteger($pivotRole);
+ 
+diff --git a/platform/core/acl/database/migrations/2024_06_06_071101_add_created_by_users_tables.php b/platform/core/acl/database/migrations/2024_06_06_071101_add_created_by_users_tables.php
+index 77e06be..9f377c5 100644
+--- a/platform/core/acl/database/migrations/2024_06_06_071101_add_created_by_users_tables.php
++++ b/platform/core/acl/database/migrations/2024_06_06_071101_add_created_by_users_tables.php
+@@ -14,7 +14,8 @@ return new class extends Migration
+     public function up(): void
+     {
+         Schema::table(
+-            $this->table, function (Blueprint $blueprint): void {
++            $this->table,
++            function (Blueprint $blueprint): void {
+                 $blueprint->integer('created_by')->default(0);
+                 $blueprint->integer('updated_by')->default(0);
+             }
+diff --git a/platform/core/acl/database/migrations/2024_10_25_063231_create_user_profiles_table.php b/platform/core/acl/database/migrations/2024_10_25_063231_create_user_profiles_table.php
+index 1ae0ea2..339211c 100644
+--- a/platform/core/acl/database/migrations/2024_10_25_063231_create_user_profiles_table.php
++++ b/platform/core/acl/database/migrations/2024_10_25_063231_create_user_profiles_table.php
+@@ -16,17 +16,19 @@ return new class extends Migration
+         Schema::create($this->table, function (Blueprint $blueprint): void {
+             $blueprint->id();
+             $blueprint->bigInteger('user_id');
+-            $blueprint->string('first_name', 30);
+-            $blueprint->string('last_name', 15);
++            // $blueprint->string('first_name', 30);
++            // $blueprint->string('last_name', 15);
+             $blueprint->string('phone_number', 11)->nullable();
+             $blueprint->date('date_of_birth')->nullable();
+             $blueprint->tinyInteger('gender');
+             $blueprint->string('avatar_url', 255)->nullable();
+             $blueprint->tinyInteger('locale');
+             $blueprint->string('address', 255)->nullable();
++            $blueprint->text('bio')->nullable();
++            $blueprint->string('position')->nullable();
+             $blueprint->bigInteger('created_by');
+             $blueprint->bigInteger('updated_by')->nullable();
+-            $blueprint->bigInteger('deleted_by')->nullable();
++            $blueprint->bigInteger('deleted_by')->nullable();            
+             $blueprint->timestamps();
+             $blueprint->softDeletes();
+         });
+diff --git a/platform/core/acl/database/seeders/RolesSeeder.php b/platform/core/acl/database/seeders/RolesSeeder.php
+index 1ea7679..d717c33 100644
+--- a/platform/core/acl/database/seeders/RolesSeeder.php
++++ b/platform/core/acl/database/seeders/RolesSeeder.php
+@@ -22,7 +22,7 @@ class RolesSeeder extends Seeder
+ 
+         // Create Administrator Role
+         $role = Role::create([
+-            'name'       => 'Administrator',
++            'name' => 'Administrator',
+             'guard_name' => self::WEB,
+         ]);
+ 
+@@ -31,7 +31,7 @@ class RolesSeeder extends Seeder
+ 
+         // Create Demo Role
+         $role = Role::create([
+-            'name'       => 'Demo',
++            'name' => 'Demo',
+             'guard_name' => self::WEB,
+         ]);
+ 
+diff --git a/platform/core/acl/database/seeders/UsersSeeder.php b/platform/core/acl/database/seeders/UsersSeeder.php
+index 6efe928..ee4e177 100644
+--- a/platform/core/acl/database/seeders/UsersSeeder.php
++++ b/platform/core/acl/database/seeders/UsersSeeder.php
+@@ -1,5 +1,4 @@
+ <?php
+-
+ namespace Parrot\ACL\Database\Seeders;
+ 
+ use Carbon\Carbon;
+@@ -17,23 +16,35 @@ class UsersSeeder extends Seeder
+     {
+         $user = User::create(
+             [
+-                'uuid'              => Str::uuid(),
+-                'name'              => 'Administrator',
+-                'email'             => 'admin@gmail.com',
++                'uuid' => Str::uuid(),
++                'name' => 'Kelvin Zeng',
++                'email' => 'admin@gmail.com',
+                 // 'password' => bcrypt('admin'),
+-                'password'          => 'admin',
++                'password' => 'Zxc321#@!',
+                 'email_verified_at' => Carbon::now()->format('Y-m-d H:i:s'),
+-                'remember_token'    => Str::random(10),
+-                'status'            => 1,
++                'remember_token' => Str::random(10),
++                'status' => 1,
+             ]
+         );
+-
+-        $user->profile()->save(UserProfile::factory()->make());
+         // assign Administrator role
+         $user->assignRole('Administrator');
+ 
++        $profileData = [
++            'user_id' => $user->id,
++            'phone_number' => '',
++            'date_of_birth' => fake()->date('Y-m-d', '2000-01-01'),
++            'gender' => 1,
++            'avatar_url' => 'https://localhost:4431/kelvin.png',
++            'locale' => 1,
++            'address' => fake()->address,
++            'bio' => '',
++            'position' => 'Senior Website Developer',
++        ];
++
++        $profile = UserProfile::create($profileData);
++
+         // Fake 10 users
+-        User::factory(10)->create()->each(function ($user): void {
++        User::factory(1)->create()->each(function ($user): void {
+             $user->profile()->save(UserProfile::factory()->make());
+             // assign Demo role
+             $user->assignRole('Demo');
+diff --git a/platform/core/acl/resources/views/auth/login.blade.php b/platform/core/acl/resources/views/auth/login.blade.php
+index ac677dd..5d7c2ea 100644
+--- a/platform/core/acl/resources/views/auth/login.blade.php
++++ b/platform/core/acl/resources/views/auth/login.blade.php
+@@ -17,7 +17,7 @@
+                     <label class="form-label fw-semibold">{{ __('auth.email address') }}:</label>
+                     <div class="form-control-feedback form-control-feedback-start">
+                         <input id="email" type="email" class="form-control @error('email') is-invalid @enderror"
+-                            name="email" value="{{ old('email', 'admin@gmail.com') }}" required autocomplete="email"
++                            name="email" value="{{ old('email', '') }}" required autocomplete="email"
+                             placeholder="john@doe.com">
+                         <div class="form-control-feedback-icon">
+                             <i class="ph-user-circle text-muted"></i>
+diff --git a/platform/core/acl/resources/views/permission/create.blade.php b/platform/core/acl/resources/views/permission/create.blade.php
+index f1b1c32..d5b2e41 100644
+--- a/platform/core/acl/resources/views/permission/create.blade.php
++++ b/platform/core/acl/resources/views/permission/create.blade.php
+@@ -31,10 +31,10 @@
+             </div>
+             <div class="card-footer text-end">
+                 <a href="{{ route('admin.permissions.index') }}" class="btn btn-light">
+-                    <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                    <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                 </a>
+                 <button class="btn btn-primary">
+-                    {{ __('common.submit') }} <i class="bi bi-send ms-2"></i>
++                    {{ __('common.submit') }} <i class="ph ph-upload-simple ms-2"></i>
+                 </button>
+             </div>
+         </div>
+diff --git a/platform/core/acl/resources/views/permission/edit.blade.php b/platform/core/acl/resources/views/permission/edit.blade.php
+index a6a000e..c041662 100644
+--- a/platform/core/acl/resources/views/permission/edit.blade.php
++++ b/platform/core/acl/resources/views/permission/edit.blade.php
+@@ -33,10 +33,10 @@
+             </div>
+             <div class="card-footer text-end">
+                 <a href="{{ route('admin.permissions.index') }}" class="btn btn-light">
+-                    <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                    <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                 </a>
+                 <button class="btn btn-primary">
+-                    {{ __('common.submit') }} <i class="bi bi-send ms-2"></i>
++                    {{ __('common.submit') }} <i class="ph ph-upload-simple ms-2"></i>
+                 </button>
+             </div>
+         </div>
+diff --git a/platform/core/acl/resources/views/permission/index.blade.php b/platform/core/acl/resources/views/permission/index.blade.php
+index 5e39954..ee9f398 100644
+--- a/platform/core/acl/resources/views/permission/index.blade.php
++++ b/platform/core/acl/resources/views/permission/index.blade.php
+@@ -23,10 +23,10 @@
+                 </div>
+                 <div class="col text-end align-middle">
+                     <a href="{{ route('admin.permissions.create') }}" class="btn btn-primary me-1 mb-2">
+-                        <i class="bi bi-plus-circle me-2"></i> {{ __('common.add new') }}
++                        <i class="ph ph-plus-circle me-2"></i> {{ __('common.add new') }}
+                     </a>
+                     <button type="button" id="btn_reset" class="btn btn-light mb-2">
+-                        <i class="bi bi-arrow-repeat me-2"></i> {{ __('common.reset') }}
++                        <i class="ph ph-repeat me-2"></i> {{ __('common.reset') }}
+                     </button>
+                 </div>
+             </div>
+diff --git a/platform/core/acl/resources/views/permission/search.blade.php b/platform/core/acl/resources/views/permission/search.blade.php
+index 83aecf2..9bf5e36 100644
+--- a/platform/core/acl/resources/views/permission/search.blade.php
++++ b/platform/core/acl/resources/views/permission/search.blade.php
+@@ -18,10 +18,10 @@
+                 <div class="row text-end">
+                     <div class="col">
+                         <button type="button" id="btn_search" class="btn btn-success mb-2 me-1">
+-                            <i class="bi bi-search me-2"></i> {{ __('common.search') }}
++                            <i class="ph ph-magnifying-glass me-2"></i> {{ __('common.search') }}
+                         </button>
+                         <button type="button" id="btn_clear" class="btn btn-light mb-2">
+-                            <i class="bi bi-eraser me-2"></i> {{ __('common.clear') }}
++                            <i class="ph ph-eraser me-2"></i> {{ __('common.clear') }}
+                         </button>
+                     </div>
+                 </div>
+diff --git a/platform/core/acl/resources/views/role/create.blade.php b/platform/core/acl/resources/views/role/create.blade.php
+index b65af5d..bb796e0 100644
+--- a/platform/core/acl/resources/views/role/create.blade.php
++++ b/platform/core/acl/resources/views/role/create.blade.php
+@@ -31,10 +31,10 @@
+             </div>
+             <div class="card-footer text-end">
+                 <a href="{{ route('admin.roles.index') }}" class="btn btn-light">
+-                    <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                    <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                 </a>
+                 <button class="btn btn-primary">
+-                    {{ __('common.submit') }} <i class="bi bi-send ms-2"></i>
++                    {{ __('common.submit') }} <i class="ph ph-upload-simple ms-2"></i>
+                 </button>
+             </div>
+         </div>
+diff --git a/platform/core/acl/resources/views/role/edit.blade.php b/platform/core/acl/resources/views/role/edit.blade.php
+index 09bbad9..5095a65 100644
+--- a/platform/core/acl/resources/views/role/edit.blade.php
++++ b/platform/core/acl/resources/views/role/edit.blade.php
+@@ -45,10 +45,10 @@
+             </div>
+             <div class="card-footer text-end">
+                 <a href="{{ route('admin.roles.index') }}" class="btn btn-light">
+-                    <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                    <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                 </a>
+                 <button class="btn btn-primary">
+-                    {{ __('common.submit') }} <i class="bi bi-send ms-2"></i>
++                    {{ __('common.submit') }} <i class="ph ph-upload-simple ms-2"></i>
+                 </button>
+             </div>
+         </div>
+diff --git a/platform/core/acl/resources/views/role/index.blade.php b/platform/core/acl/resources/views/role/index.blade.php
+index 7a0d014..2cafb7c 100644
+--- a/platform/core/acl/resources/views/role/index.blade.php
++++ b/platform/core/acl/resources/views/role/index.blade.php
+@@ -23,10 +23,10 @@
+                 </div>
+                 <div class="col text-end align-middle">
+                     <a href="{{ route('admin.roles.create') }}" class="btn btn-primary me-1 mb-2">
+-                        <i class="bi bi-plus-circle me-2"></i> {{ __('common.add new') }}
++                        <i class="ph ph-plus-circle me-2"></i> {{ __('common.add new') }}
+                     </a>
+                     <button type="button" id="btn_reset" class="btn btn-light mb-2">
+-                        <i class="bi bi-arrow-repeat me-2"></i> {{ __('common.reset') }}
++                        <i class="ph ph-repeat me-2"></i> {{ __('common.reset') }}
+                     </button>
+                 </div>
+             </div>
+diff --git a/platform/core/acl/resources/views/role/search.blade.php b/platform/core/acl/resources/views/role/search.blade.php
+index 458b9c8..59f13b0 100644
+--- a/platform/core/acl/resources/views/role/search.blade.php
++++ b/platform/core/acl/resources/views/role/search.blade.php
+@@ -18,10 +18,10 @@
+                 <div class="row text-end">
+                     <div class="col">
+                         <button type="button" id="btn_search" class="btn btn-success mb-2 me-1">
+-                            <i class="bi bi-search me-2"></i> {{ __('common.search') }}
++                            <i class="ph ph-magnifying-glass me-2"></i> {{ __('common.search') }}
+                         </button>
+                         <button type="button" id="btn_clear" class="btn btn-light mb-2">
+-                            <i class="bi bi-eraser me-2"></i> {{ __('common.clear') }}
++                            <i class="ph ph-eraser me-2"></i> {{ __('common.clear') }}
+                         </button>
+                     </div>
+                 </div>
+diff --git a/platform/core/acl/resources/views/user/create.blade.php b/platform/core/acl/resources/views/user/create.blade.php
+index 8ef494a..fbd83d0 100644
+--- a/platform/core/acl/resources/views/user/create.blade.php
++++ b/platform/core/acl/resources/views/user/create.blade.php
+@@ -43,10 +43,10 @@
+             </div>
+             <div class="card-footer text-end">
+                 <a href="{{ route('admin.users.index') }}" class="btn btn-light">
+-                    <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                    <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                 </a>
+                 <button class="btn btn-primary">
+-                    {{ __('common.submit') }} <i class="bi bi-send ms-2"></i>
++                    {{ __('common.submit') }} <i class="ph ph-upload-simple ms-2"></i>
+                 </button>
+             </div>
+         </div>
+diff --git a/platform/core/acl/resources/views/user/edit.blade.php b/platform/core/acl/resources/views/user/edit.blade.php
+index bb63754..a13ba76 100644
+--- a/platform/core/acl/resources/views/user/edit.blade.php
++++ b/platform/core/acl/resources/views/user/edit.blade.php
+@@ -6,7 +6,7 @@
+ 
+ @section('breadcrumb')
+     <a href="{{ route('admin.users.index') }}" class="breadcrumb-item">{{ __('admin.users') }}</a>
+-    <span class="breadcrumb-item active">{{ __('common.edit') }} {{ __('user.user') }}</span>
++    <span class="breadcrumb-item active">{{ __('common.edit') }} {{ __('admin.user') }}</span>
+ @endsection
+ 
+ @section('content')
+@@ -64,10 +64,10 @@
+             </div>
+             <div class="card-footer text-end">
+                 <a href="{{ route('admin.users.index') }}" class="btn btn-light">
+-                    <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                    <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                 </a>
+                 <button class="btn btn-primary">
+-                    {{ __('common.submit') }} <i class="bi bi-send ms-2"></i>
++                    {{ __('common.submit') }} <i class="ph ph-upload-simple ms-2"></i>
+                 </button>
+             </div>
+         </div>
+diff --git a/platform/core/acl/resources/views/user/index.blade.php b/platform/core/acl/resources/views/user/index.blade.php
+index 1cfb8b6..68ab63e 100644
+--- a/platform/core/acl/resources/views/user/index.blade.php
++++ b/platform/core/acl/resources/views/user/index.blade.php
+@@ -23,10 +23,10 @@
+                 </div>
+                 <div class="col text-end align-middle">
+                     <a href="{{ route('admin.users.create') }}" class="btn btn-primary me-1 mb-2">
+-                        <i class="bi bi-plus-circle me-2"></i> {{ __('common.add new') }}
++                        <i class="ph ph-plus-circle me-2"></i> {{ __('common.add new') }}
+                     </a>
+                     <button type="button" id="btn_reset" class="btn btn-light mb-2">
+-                        <i class="bi bi-arrow-repeat me-2"></i> {{ __('common.reset') }}
++                        <i class="ph ph-repeat me-2"></i> {{ __('common.reset') }}
+                     </button>
+                 </div>
+             </div>
+diff --git a/platform/core/acl/resources/views/user/profile.blade.php b/platform/core/acl/resources/views/user/profile.blade.php
+index 22486d0..905e37c 100644
+--- a/platform/core/acl/resources/views/user/profile.blade.php
++++ b/platform/core/acl/resources/views/user/profile.blade.php
+@@ -24,7 +24,7 @@
+                             height="200" />
+                     @endif
+                     <div class="browse-button">
+-                        <i class="ph ph-pencil"></i>
++                        <i class="ph ph-pencil-simplecil"></i>
+                         <input class="browse-input" name="avatar_url" type="file" id="avatar_url" />
+                     </div>
+                     @error('avatar_url')
+@@ -48,6 +48,10 @@
+                                 <x-pr::input type="text" id="name" name="name" label="{{__('auth.name') }}"
+                                     value="{{ old('name', $user->name) }}" />
+                             </div>
++                            <div class="col-lg-6">
++                                <x-pr::input type="text" id="position" name="position" label="{{__('auth.position') }}"
++                                    value="{{ old('position', $user->profile->position) }}" />
++                            </div>
+                         </div>
+                         <div class="row">
+                             <div class="col-lg-6">
+@@ -75,6 +79,12 @@
+                                     selected="{{ $user->profile->gender }}" />
+                             </div>
+                         </div>
++                        <div class="row">
++                            <div class="col-lg-12">
++                                <x-pr::textarea id="bio" name="bio" label="{{__('auth.bio') }}"
++                                    value="{{ old('bio', $user->profile->bio) }}" />
++                            </div>
++                        </div>
+                     </div>
+                 </div>
+ 
+@@ -100,10 +110,10 @@
+                 </div>
+                 <div class="text-end">
+                     <a href="{{ route('admin.users.index') }}" class="btn btn-light">
+-                        <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                        <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                     </a>
+                     <button class="btn btn-primary">
+-                        {{ __('common.submit') }} <i class="bi bi-send ms-2"></i>
++                        {{ __('common.submit') }} <i class="ph ph-upload-simple ms-2"></i>
+                     </button>
+                 </div>
+             </div>
+diff --git a/platform/core/acl/resources/views/user/search.blade.php b/platform/core/acl/resources/views/user/search.blade.php
+index d351a3e..a34499c 100644
+--- a/platform/core/acl/resources/views/user/search.blade.php
++++ b/platform/core/acl/resources/views/user/search.blade.php
+@@ -31,10 +31,10 @@
+                 <div class="row  text-end">
+                     <div class="col">
+                         <button type="button" id="btn_search" class="btn btn-success mb-2 me-1">
+-                            <i class="bi bi-search me-2"></i> {{ __('common.search') }}
++                            <i class="ph ph-magnifying-glass me-2"></i> {{ __('common.search') }}
+                         </button>
+                         <button type="button" id="btn_clear" class="btn btn-light mb-2">
+-                            <i class="bi bi-eraser me-2"></i> {{ __('common.clear') }}
++                            <i class="ph ph-eraser me-2"></i> {{ __('common.clear') }}
+                         </button>
+                     </div>
+                 </div>
+diff --git a/platform/core/acl/resources/views/user/token.blade.php b/platform/core/acl/resources/views/user/token.blade.php
+index 4f4b8f1..3333883 100644
+--- a/platform/core/acl/resources/views/user/token.blade.php
++++ b/platform/core/acl/resources/views/user/token.blade.php
+@@ -28,7 +28,7 @@
+             </div>
+             <div class="text-end flex justify-content-end mb-3 gap-2">
+                 <a href="{{ route('admin.users.index') }}" class="btn btn-light">
+-                    <i class="bi bi-arrow-left-circle me-2"></i> {{ __('common.back') }}
++                    <i class="ph ph-caret-double-left me-2"></i> {{ __('common.back') }}
+                 </a>
+                 <div>
+                     <form class="" action="{{ route('admin.users.token') }}" method="post"
+@@ -36,7 +36,7 @@
+                         @csrf
+                         @method('DELETE')
+                         <button class="btn btn-danger">
+-                            {{ __('common.revoke') }} <i class="bi bi-send ms-2"></i>
++                            {{ __('common.revoke') }} <i class="ph ph-trash ms-2"></i>
+                         </button>
+                     </form>
+                 </div>
+@@ -45,7 +45,7 @@
+                         enctype="multipart/form-data">
+                         @csrf
+                         <button class="btn btn-primary">
+-                            {{ __('common.create') }} <i class="bi bi-send ms-2"></i>
++                            {{ __('common.create') }} <i class="ph ph-upload-simple ms-2"></i>
+                         </button>
+                     </form>
+                 </div>
+diff --git a/platform/core/acl/routes/web.php b/platform/core/acl/routes/web.php
+index 7b36b8c..1ea607e 100644
+--- a/platform/core/acl/routes/web.php
++++ b/platform/core/acl/routes/web.php
+@@ -10,8 +10,6 @@ use Parrot\ACL\Http\Controllers\UserController;
+ $prefix = config('base.admin_url_prefix');
+ 
+ require __DIR__ . '/auth.php';
+-Route::prefix($prefix)->middleware(['web'])->name('admin.')->group(function (): void {
+-});
+ 
+ Route::prefix($prefix)->middleware(['web', 'auth'])->name('admin.')->group(function (): void {
+     // Users
+diff --git a/platform/core/acl/src/Http/Controllers/PermissionController.php b/platform/core/acl/src/Http/Controllers/PermissionController.php
+index 7cf9113..d2bf1bd 100644
+--- a/platform/core/acl/src/Http/Controllers/PermissionController.php
++++ b/platform/core/acl/src/Http/Controllers/PermissionController.php
+@@ -120,7 +120,7 @@ class PermissionController extends AdminBaseController
+         }
+ 
+         return view('core/acl::permission.edit', [
+-            'permission'      => $permission,
++            'permission' => $permission,
+             'guard_name_list' => $this->permissionService->getGuardNameList(),
+         ]);
+     }
+diff --git a/platform/core/acl/src/Http/Controllers/ProfileController.php b/platform/core/acl/src/Http/Controllers/ProfileController.php
+index 43cf151..4f27df5 100644
+--- a/platform/core/acl/src/Http/Controllers/ProfileController.php
++++ b/platform/core/acl/src/Http/Controllers/ProfileController.php
+@@ -42,9 +42,9 @@ class ProfileController extends AdminBaseController
+         $user = $this->userRepository->find(Auth::id());
+ 
+         return view('core/acl::user.profile', [
+-            'user'          => $user,
++            'user' => $user,
+             'timezone_list' => TimeZone::listByRegion('Asia'),
+-            'gender_list'   => GenderStatusType::toSelectArray(),
++            'gender_list' => GenderStatusType::toSelectArray(),
+         ]);
+     }
+ 
+@@ -110,11 +110,11 @@ class ProfileController extends AdminBaseController
+         }
+ 
+         // Handle other attributes
+-        $attributes['name']          = $profileRequest->name;
+-        $attributes['address']       = $profileRequest->address;
+-        $attributes['phone_number']  = $profileRequest->phone_number;
++        $attributes['name'] = $profileRequest->name;
++        $attributes['address'] = $profileRequest->address;
++        $attributes['phone_number'] = $profileRequest->phone_number;
+         $attributes['date_of_birth'] = $profileRequest->date_of_birth;
+-        $attributes['gender']        = $profileRequest->gender;
++        $attributes['gender'] = $profileRequest->gender;
+ 
+         return $attributes;
+     }
+diff --git a/platform/core/acl/src/Http/Controllers/RoleController.php b/platform/core/acl/src/Http/Controllers/RoleController.php
+index 2c4dbdd..1eb51b5 100644
+--- a/platform/core/acl/src/Http/Controllers/RoleController.php
++++ b/platform/core/acl/src/Http/Controllers/RoleController.php
+@@ -31,7 +31,7 @@ class RoleController extends AdminBaseController
+      */
+     public function __construct(RoleService $roleService, PermissionRepositoryInterface $permissionRepository)
+     {
+-        $this->roleService          = $roleService;
++        $this->roleService = $roleService;
+         $this->permissionRepository = $permissionRepository;
+ 
+         // Middleware for permissions (commented for now)
+@@ -126,9 +126,9 @@ class RoleController extends AdminBaseController
+         }
+ 
+         return view('core/acl::role.edit', [
+-            'role'                => $role,
+-            'guard_name_list'     => $this->roleService->getGuardNameList(),
+-            'permission_list'     => $this->permissionRepository->getAll(),
++            'role' => $role,
++            'guard_name_list' => $this->roleService->getGuardNameList(),
++            'permission_list' => $this->permissionRepository->getAll(),
+             'permission_selected' => $role->permissions->pluck('name')->toArray(),
+         ]);
+     }
+diff --git a/platform/core/acl/src/Http/Controllers/UserController.php b/platform/core/acl/src/Http/Controllers/UserController.php
+index 0004bcb..44158e4 100644
+--- a/platform/core/acl/src/Http/Controllers/UserController.php
++++ b/platform/core/acl/src/Http/Controllers/UserController.php
+@@ -124,8 +124,8 @@ class UserController extends AdminBaseController
+         }
+ 
+         return view('core/acl::user.edit', [
+-            'user'          => $user,
+-            'role_list'     => $this->roleService->getAllRoles(),
++            'user' => $user,
++            'role_list' => $this->roleService->getAllRoles(),
+             'role_selected' => $user->roles->pluck('name')->toArray(),
+         ]);
+     }
+diff --git a/platform/core/acl/src/Http/Requests/Permission/CreateRequest.php b/platform/core/acl/src/Http/Requests/Permission/CreateRequest.php
+index 9d46f9f..ace46a0 100644
+--- a/platform/core/acl/src/Http/Requests/Permission/CreateRequest.php
++++ b/platform/core/acl/src/Http/Requests/Permission/CreateRequest.php
+@@ -2,7 +2,6 @@
+ namespace Parrot\ACL\Http\Requests\Permission;
+ 
+ use Illuminate\Foundation\Http\FormRequest;
+-use Illuminate\Validation\Rule;
+ 
+ class CreateRequest extends FormRequest
+ {
+@@ -14,7 +13,7 @@ class CreateRequest extends FormRequest
+         switch ($this->method()) {
+             case 'POST':
+                 return [
+-                    'name'       => [
++                    'name' => [
+                         'required',
+                         'max:255',
+                     ],
+diff --git a/platform/core/acl/src/Http/Requests/Permission/UpdateRequest.php b/platform/core/acl/src/Http/Requests/Permission/UpdateRequest.php
+index 2b60207..70c5ea3 100644
+--- a/platform/core/acl/src/Http/Requests/Permission/UpdateRequest.php
++++ b/platform/core/acl/src/Http/Requests/Permission/UpdateRequest.php
+@@ -2,7 +2,6 @@
+ namespace Parrot\ACL\Http\Requests\Permission;
+ 
+ use Illuminate\Foundation\Http\FormRequest;
+-use Illuminate\Validation\Rule;
+ 
+ class UpdateRequest extends FormRequest
+ {
+@@ -16,7 +15,7 @@ class UpdateRequest extends FormRequest
+             case 'PATCH':
+ 
+                 return [
+-                    'name'       => [
++                    'name' => [
+                         'required',
+                         'max:255',
+                     ],
+diff --git a/platform/core/acl/src/Http/Requests/ProfileRequest.php b/platform/core/acl/src/Http/Requests/ProfileRequest.php
+index 6b97b8d..66ea303 100644
+--- a/platform/core/acl/src/Http/Requests/ProfileRequest.php
++++ b/platform/core/acl/src/Http/Requests/ProfileRequest.php
+@@ -14,29 +14,29 @@ class ProfileRequest extends FormRequest
+             case 'PUT':
+             case 'PATCH':
+                 return [
+-                    'name'                  => [
++                    'name' => [
+                         'required',
+                         'max:255',
+                     ],
+-                    'address'               => [
++                    'address' => [
+                         'max:255',
+                     ],
+-                    'phone_number'          => [
++                    'phone_number' => [
+                         // 'max:11',
+                         'numeric',
+                     ],
+-                    'date_of_birth'         => [],
+-                    'gender'                => [
++                    'date_of_birth' => [],
++                    'gender' => [
+                         'required',
+                         'in:' . implode(',', array_keys(\Parrot\Base\Enums\GenderStatusType::toSelectArray())),
+                     ],
+-                    'password'              => [
++                    'password' => [
+                         'confirmed',
+                     ],
+                     'password_confirmation' => [
+                         'required_with:password',
+                     ],
+-                    'avatar_url'            => [
++                    'avatar_url' => [
+                         'image',
+                         'mimes:jpeg,png',
+                         'max:2048',
+diff --git a/platform/core/acl/src/Http/Requests/Role/CreateRequest.php b/platform/core/acl/src/Http/Requests/Role/CreateRequest.php
+index c19be0b..1555ff5 100644
+--- a/platform/core/acl/src/Http/Requests/Role/CreateRequest.php
++++ b/platform/core/acl/src/Http/Requests/Role/CreateRequest.php
+@@ -13,7 +13,7 @@ class CreateRequest extends FormRequest
+         switch ($this->method()) {
+             case 'POST':
+                 return [
+-                    'name'       => [
++                    'name' => [
+                         'required',
+                         'max:255',
+                     ],
+diff --git a/platform/core/acl/src/Http/Requests/Role/UpdateRequest.php b/platform/core/acl/src/Http/Requests/Role/UpdateRequest.php
+index 786841c..f963d3e 100644
+--- a/platform/core/acl/src/Http/Requests/Role/UpdateRequest.php
++++ b/platform/core/acl/src/Http/Requests/Role/UpdateRequest.php
+@@ -14,7 +14,7 @@ class UpdateRequest extends FormRequest
+             case 'PUT':
+             case 'PATCH':
+                 return [
+-                    'name'       => [
++                    'name' => [
+                         'required',
+                         'max:255',
+                     ],
+diff --git a/platform/core/acl/src/Http/Requests/User/CreateRequest.php b/platform/core/acl/src/Http/Requests/User/CreateRequest.php
+index 1392b22..1bd251b 100644
+--- a/platform/core/acl/src/Http/Requests/User/CreateRequest.php
++++ b/platform/core/acl/src/Http/Requests/User/CreateRequest.php
+@@ -16,17 +16,17 @@ class CreateRequest extends FormRequest
+             case 'POST':
+ 
+                 return [
+-                    'name'                  => [
++                    'name' => [
+                         'required',
+                         'max:255',
+                     ],
+-                    'email'                 => [
++                    'email' => [
+                         'required',
+                         'max:255',
+                         'email',
+                         Rule::unique('users'),
+                     ],
+-                    'password'              => [
++                    'password' => [
+                         'required',
+                         'confirmed',
+                         'min:3',
+diff --git a/platform/core/acl/src/Http/Requests/User/UpdateRequest.php b/platform/core/acl/src/Http/Requests/User/UpdateRequest.php
+index a9397e0..ac58a2b 100644
+--- a/platform/core/acl/src/Http/Requests/User/UpdateRequest.php
++++ b/platform/core/acl/src/Http/Requests/User/UpdateRequest.php
+@@ -16,23 +16,23 @@ class UpdateRequest extends FormRequest
+             case 'PUT':
+             case 'PATCH':
+                 return [
+-                    'name'                  => [
++                    'name' => [
+                         'required',
+                         'max:255',
+                     ],
+-                    'email'                 => [
++                    'email' => [
+                         'required',
+                         'max:255',
+                         'email',
+                         Rule::unique('users')->ignore($this->route()->user),
+                     ],
+-                    'password'              => [
++                    'password' => [
+                         'confirmed',
+                     ],
+                     'password_confirmation' => [
+                         'required_with:password',
+                     ],
+-                    'roles'                 => [
++                    'roles' => [
+                         'required',
+                     ],
+                 ];
+diff --git a/platform/core/acl/src/Models/User.php b/platform/core/acl/src/Models/User.php
+index 54f0408..5191929 100644
+--- a/platform/core/acl/src/Models/User.php
++++ b/platform/core/acl/src/Models/User.php
+@@ -58,10 +58,10 @@ class User extends ModelsUser implements MustVerifyEmail
+     protected function casts(): array
+     {
+         return [
+-            'created_at'        => 'datetime',
+-            'updated_at'        => 'datetime',
++            'created_at' => 'datetime',
++            'updated_at' => 'datetime',
+             'email_verified_at' => 'datetime',
+-            'password'          => 'hashed',
++            'password' => 'hashed',
+         ];
+     }
+ 
+@@ -122,7 +122,7 @@ class User extends ModelsUser implements MustVerifyEmail
+         static::creating(function ($model): void {
+             $model->created_by = $model->getAuthId('created_by');
+             $model->updated_by = $model->getAuthId('updated_by');
+-            $model->uuid       = Schema::hasColumn($model->getTable(), 'uuid') ? Str::uuid()->toString() : null;
++            $model->uuid = Schema::hasColumn($model->getTable(), 'uuid') ? Str::uuid()->toString() : null;
+         });
+ 
+         static::updating(function ($model): void {
+diff --git a/platform/core/acl/src/Models/UserProfile.php b/platform/core/acl/src/Models/UserProfile.php
+index 9da7204..5383a97 100644
+--- a/platform/core/acl/src/Models/UserProfile.php
++++ b/platform/core/acl/src/Models/UserProfile.php
+@@ -5,7 +5,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
+ use Illuminate\Database\Eloquent\Relations\BelongsTo;
+ use Illuminate\Database\Eloquent\SoftDeletes;
+ use Parrot\ACL\Database\Factories\UserProfileFactory;
+-use Parrot\ACL\Models\User;
+ use Parrot\Base\Models\BaseModel;
+ 
+ class UserProfile extends BaseModel
+@@ -23,6 +22,8 @@ class UserProfile extends BaseModel
+         'date_of_birth',
+         'gender',
+         'avatar_url',
++        'bio',
++        'position',
+         // 'locale',
+         'address',
+         'created_by',
+diff --git a/platform/core/acl/src/Repositories/Eloquent/UserRepository.php b/platform/core/acl/src/Repositories/Eloquent/UserRepository.php
+index 3aae412..fac750f 100644
+--- a/platform/core/acl/src/Repositories/Eloquent/UserRepository.php
++++ b/platform/core/acl/src/Repositories/Eloquent/UserRepository.php
+@@ -1,7 +1,6 @@
+ <?php
+ namespace Parrot\ACL\Repositories\Eloquent;
+ 
+-use Illuminate\Database\Eloquent\Collection;
+ use Illuminate\Http\Request;
+ use Parrot\ACL\Models\User;
+ use Parrot\ACL\Repositories\UserRepositoryInterface;
+diff --git a/platform/core/acl/src/Resources/PermissionResource.php b/platform/core/acl/src/Resources/PermissionResource.php
+index cae3c3e..bd88296 100644
+--- a/platform/core/acl/src/Resources/PermissionResource.php
++++ b/platform/core/acl/src/Resources/PermissionResource.php
+@@ -41,13 +41,13 @@ class PermissionResource extends JsonResource
+      */
+     protected function generateActionButtons(): string
+     {
+-        $editUrl   = route('admin.permissions.edit', ['permission' => $this->id]);
++        $editUrl = route('admin.permissions.edit', ['permission' => $this->id]);
+         $deleteUrl = route('admin.permissions.destroy', ['permission' => $this->id]);
+ 
+         return sprintf(
+             '<div class="flex gap-4 items-center">
+                 <a href="%s" class="hover:text-info me-2">
+-                    <i class="ph ph-pen"></i>
++                    <i class="ph ph-pencil-simple"></i>
+                 </a>
+                 <a href="#" class="remove-data" data-id="%s">
+                     <i class="ph ph-trash"></i>
+diff --git a/platform/core/acl/src/Resources/RoleResource.php b/platform/core/acl/src/Resources/RoleResource.php
+index bc154a7..2c706e7 100644
+--- a/platform/core/acl/src/Resources/RoleResource.php
++++ b/platform/core/acl/src/Resources/RoleResource.php
+@@ -41,13 +41,13 @@ class RoleResource extends JsonResource
+      */
+     protected function generateActionButtons(): string
+     {
+-        $editUrl   = route('admin.roles.edit', ['role' => $this->id]);
++        $editUrl = route('admin.roles.edit', ['role' => $this->id]);
+         $deleteUrl = route('admin.roles.destroy', ['role' => $this->id]);
+ 
+         return sprintf(
+             '<div class="flex gap-4 items-center">
+                 <a href="%s" class="hover:text-info me-2">
+-                    <i class="ph ph-pen"></i>
++                    <i class="ph ph-pencil-simple"></i>
+                 </a>
+                 <a href="#" class="remove-data" data-id="%s">
+                     <i class="ph ph-trash"></i>
+diff --git a/platform/core/acl/src/Resources/UserResource.php b/platform/core/acl/src/Resources/UserResource.php
+index f1bdd41..5e5a575 100644
+--- a/platform/core/acl/src/Resources/UserResource.php
++++ b/platform/core/acl/src/Resources/UserResource.php
+@@ -58,13 +58,13 @@ class UserResource extends JsonResource
+      */
+     protected function generateActionButtons(): string
+     {
+-        $editUrl   = route('admin.users.edit', ['user' => $this->id]);
++        $editUrl = route('admin.users.edit', ['user' => $this->id]);
+         $deleteUrl = route('admin.users.destroy', ['user' => $this->id]);
+ 
+         return sprintf(
+             '<div class="flex gap-4 items-center">
+                 <a href="%s" class="hover:text-info me-2">
+-                    <i class="ph ph-pen"></i>
++                    <i class="ph ph-pencil-simple"></i>
+                 </a>
+                 <a href="#" class="remove-data" data-id="%s">
+                     <i class="ph ph-trash"></i>
+diff --git a/platform/core/acl/src/Services/PermissionService.php b/platform/core/acl/src/Services/PermissionService.php
+index 5124b77..cb04b7f 100644
+--- a/platform/core/acl/src/Services/PermissionService.php
++++ b/platform/core/acl/src/Services/PermissionService.php
+@@ -53,6 +53,7 @@ class PermissionService
+     public function createPermission(Request $request)
+     {
+         $attributes = $request->all();
++
+         return $this->permissionRepository->create($attributes);
+     }
+ 
+@@ -66,6 +67,7 @@ class PermissionService
+     public function updatePermission(int $id, Request $request)
+     {
+         $attributes = $request->all();
++
+         return $this->permissionRepository->update($id, $attributes);
+     }
+ 
+@@ -88,6 +90,7 @@ class PermissionService
+     public function getGuardNameList(): array
+     {
+         $list = $this->permissionRepository->getGuardNameList();
++
+         return array_combine($list, $list);
+     }
+ }
+diff --git a/platform/core/acl/src/Services/RoleService.php b/platform/core/acl/src/Services/RoleService.php
+index 8e6237e..b4354ea 100644
+--- a/platform/core/acl/src/Services/RoleService.php
++++ b/platform/core/acl/src/Services/RoleService.php
+@@ -53,6 +53,7 @@ class RoleService
+     public function createRole(Request $request)
+     {
+         $attributes = $request->all();
++
+         return $this->roleRepository->create($attributes);
+     }
+ 
+@@ -66,6 +67,7 @@ class RoleService
+     public function updateRole(int $id, Request $request)
+     {
+         $attributes = $request->all();
++
+         return $this->roleRepository->update($id, $attributes);
+     }
+ 
+@@ -88,6 +90,7 @@ class RoleService
+     public function getGuardNameList(): array
+     {
+         $list = $this->roleRepository->getGuardNameList();
++
+         return array_combine($list, $list);
+     }
+ }
+diff --git a/platform/core/acl/src/Services/UserService.php b/platform/core/acl/src/Services/UserService.php
+index bc3268b..570f610 100644
+--- a/platform/core/acl/src/Services/UserService.php
++++ b/platform/core/acl/src/Services/UserService.php
+@@ -55,6 +55,7 @@ class UserService
+     public function createUser(Request $request)
+     {
+         $attributes = $request->all();
++
+         return $this->userRepository->create($attributes);
+     }
+ 
+@@ -104,4 +105,28 @@ class UserService
+ 
+         return $user;
+     }
++
++    /**
++     * Retrieve a list of authors.
++     *
++     * This method returns a collection or array of users who are considered authors.
++     * The criteria for being an author may depend on roles, permissions, or other business logic.
++     *
++     * @return array|Collection List of author users.
++     */
++    public function getAuthorList()
++    {
++        $users = $this->getAllUsers();
++
++        if ($users->isEmpty()) {
++            return [];
++        }
++
++        // pluck the 'id' and 'name' attributes from each user
++        if ($users instanceof \Illuminate\Support\Collection) {
++            return $users->pluck('name', 'id')->toArray();
++        }
++
++        return collect($users)->pluck('name', 'id')->toArray();
++    }
+ }
+diff --git a/platform/core/base/config/nav.php b/platform/core/base/config/nav.php
+index 546165b..114c12b 100644
+--- a/platform/core/base/config/nav.php
++++ b/platform/core/base/config/nav.php
+@@ -45,9 +45,9 @@ return [
+     //     'icon' => 'ph ph-image',
+     // ],
+     [
+-        'name'     => 'admin.system',
+-        'url'      => 'admin.system.index',
+-        'icon'     => 'ph ph-gear-six',
++        'name' => 'admin.system',
++        'url' => 'admin.system.index',
++        'icon' => 'ph ph-gear-six',
+         'priority' => 999,
+     ],
+ ];
+diff --git a/platform/core/base/resources/views/components/forms/daterangepicker.blade.php b/platform/core/base/resources/views/components/forms/daterangepicker.blade.php
+new file mode 100644
+index 0000000..f8ce243
+--- /dev/null
++++ b/platform/core/base/resources/views/components/forms/daterangepicker.blade.php
+@@ -0,0 +1,66 @@
++@props([
++    'name',
++    'label' => null,
++    'value' => null,
++    'placeholder' => null,
++    'required' => false,
++    'id' => null,
++    'class' => '',
++    'disabled' => false,
++    'format' => 'mm/dd/yyyy',
++])
++
++@php
++    $id = $id ?? $name;
++@endphp
++
++<div class="mb-3">
++    @if ($label)
++        <label for="{{ $id }}" class="form-label fw-semibold">
++            {{ $label }}:
++            @if ($required)
++                <span class="text-danger">*</span>
++            @endif
++        </label>
++    @endif
++
++    <div class="input-group">
++        <input type="text" id="{{ $id }}" name="{{ $name }}" value="{{ old($name, $value) }}"
++            {{ $required ? 'required' : '' }} {{ $disabled ? 'disabled' : '' }}
++            class="form-control {{ $errors->has($name) ? 'is-invalid' : '' }} {{ $class }}"
++            placeholder="{{ $placeholder }}" autocomplete="off">
++        <span class="input-group-text"><i class="ph-calendar"></i></span>
++    </div>
++
++    @error($name)
++        <div class="invalid-feedback mt-1" role="alert">
++            {{ $message }}
++        </div>
++    @enderror
++</div>
++
++@push('scripts')
++    <script>
++        $(function() {
++            // Khởi tạo daterangepicker nếu bạn dùng thư viện daterangepicker
++            $('#{{ $id }}').daterangepicker({
++                autoUpdateInput: false,
++                locale: {
++                    format: '{{ $format }}',
++                    cancelLabel: '{{ __("common.clear") }}',
++                },
++                parentEl: '.content-inner',
++                showDropdowns: true
++            });
++
++            $('#{{ $id }}').on('apply.daterangepicker', function(ev, picker) {
++                $(this).val(picker.startDate.format('{{ $format }}') + ' - ' + picker.endDate.format(
++                    '{{ $format }}'));
++            });
++
++            $('#{{ $id }}').on('cancel.daterangepicker', function(ev, picker) {
++                $(this).val('');
++            });
++        });
++    </script>
++@endpush
+diff --git a/platform/core/base/resources/views/system/index.blade.php b/platform/core/base/resources/views/system/index.blade.php
+index 037f492..1aac31f 100644
+--- a/platform/core/base/resources/views/system/index.blade.php
++++ b/platform/core/base/resources/views/system/index.blade.php
+@@ -25,7 +25,7 @@
+                             <h6 class="mb-1">
+                                 <a href="{{ route('admin.users.index') }}">{{ __('admin.users') }}</a>
+                             </h6>
+-                            <p class="text-muted">{{ __('admin.system.view and update your system users') }}</p>
++                            <p class="text-muted"><small>{{ __('admin.system.view and update your system users') }}</small></p>
+                         </div>
+                     </div>
+                 </div>
+@@ -40,7 +40,7 @@
+                             <h6 class="mb-1">
+                                 <a href="{{ route('admin.roles.index') }}">{{ __('admin.roles') }}</a>
+                             </h6>
+-                            <p class="text-muted">{{ __('admin.system.view and update your system roles') }}</p>
++                            <p class="text-muted"><small>{{ __('admin.system.view and update your system roles') }}</small></p>
+                         </div>
+                     </div>
+                 </div>
+@@ -55,14 +55,14 @@
+                             <h6 class="mb-1">
+                                 <a href="{{ route('admin.permissions.index') }}">{{ __('admin.permissions') }}</a>
+                             </h6>
+-                            <p class="text-muted">{{ __('admin.system.view and update your system permissions') }}</p>
++                            <p class="text-muted"><small>{{ __('admin.system.view and update your system permissions') }}</small></p>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+         </div>
+     </div>
+-    <!-- /Common -->    
++    <!-- /Common -->
+ @endsection
+ 
+ @push('scripts')
+diff --git a/platform/core/base/routes/web.php b/platform/core/base/routes/web.php
+index ecbd12f..1da32a9 100644
+--- a/platform/core/base/routes/web.php
++++ b/platform/core/base/routes/web.php
+@@ -8,20 +8,20 @@ Route::group(['namespace' => 'Parrot\Base\Http\Controllers'], function (): void
+     // Route::get('base', [BaseController::class, 'index'])->name('base.index');
+ });
+ 
+-// Clear cache in laravel
+-Route::get(
+-    '/clear-cache',
+-    function () {
+-        Artisan::call('optimize:clear');
+-
+-        // return what you want
+-        return redirect()->back()->withSuccess('Cache is cleared');
+-    }
+-);
+-
+ $prefix = config('base.admin_url_prefix');
+ 
+ Route::prefix($prefix)->middleware(['web'])->name('admin.')->group(function (): void {
++    // Clear cache in laravel
++    Route::get(
++        'clear-cache',
++        function () {
++            Artisan::call('optimize:clear');
++
++            // return what you want
++            return redirect()->back()->withSuccess('Cache is cleared');
++        }
++    )->name('clear_cache');
++
+     Route::get('', function () {
+         if (! auth()->check()) {
+             return redirect()->route('admin.login');
+@@ -29,6 +29,11 @@ Route::prefix($prefix)->middleware(['web'])->name('admin.')->group(function ():
+ 
+         return redirect()->route('admin.dashboard');
+     });
++
++    // Dashboard
++    Route::get('dashboard', function () {
++        return redirect()->route('admin.users.index');
++    })->name('admin.dashboard');
+     // System
+     Route::get('system', [SystemController::class, 'index'])->name('system.index');
+ });
+diff --git a/platform/core/base/src/Console/GenerateSitemap.php b/platform/core/base/src/Console/GenerateSitemap.php
+new file mode 100644
+index 0000000..56bba62
+--- /dev/null
++++ b/platform/core/base/src/Console/GenerateSitemap.php
+@@ -0,0 +1,74 @@
++<?php
++namespace Parrot\Base\Console;
++
++use Carbon\Carbon;
++use Illuminate\Console\Command;
++use Parrot\Blog\Models\Article;
++
++class GenerateSitemap extends Command
++{
++    /**
++     * The name and signature of the console command.
++     *
++     * @var string
++     */
++    protected $signature = 'sitemap:generate';
++
++    /**
++     * The console command description.
++     *
++     * @var string
++     */
++    protected $description = 'Generate the sitemap.';
++
++    public function handle(): void
++    {
++        $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
++
++        // Thêm các URL tĩnh
++        $this->addUrlToSitemap($xml, '/', Carbon::yesterday(), 'daily', 1.0);
++        $this->addUrlToSitemap($xml, '/about', Carbon::yesterday(), 'weekly', 0.8);
++        $this->addUrlToSitemap($xml, '/contact', Carbon::yesterday(), 'weekly', 0.8);
++
++        // Thêm các URL động từ database
++        $articles = Article::where('status', 2)->get();
++        // Thay đổi vòng lặp foreach
++        foreach ($articles as $article) {
++            $url = route('frontend.blog.article.detail', ['slug' => $article->slug], false);
++            if (! empty($url)) {
++                $this->addUrlToSitemap(
++                    $xml,
++                    $url,
++                    // Chuyển đổi $article->updated_at thành đối tượng Carbon
++                    Carbon::parse($article->updated_at),
++                    'monthly',
++                    0.9
++                );
++            }
++        }
++
++        // Ghi nội dung XML ra file sitemap.xml
++        $xml->asXML(public_path('sitemap.xml'));
++
++        $this->info('Sitemap generated successfully!');
++    }
++
++    /**
++     * Helper function để thêm một URL vào đối tượng XML
++     *
++     * @param \SimpleXMLElement $xml
++     * @param string $loc
++     * @param Carbon $lastmod
++     * @param string $changefreq
++     * @param float $priority
++     * @return void
++     */
++    protected function addUrlToSitemap(\SimpleXMLElement $xml, string $loc, Carbon $lastmod, string $changefreq, float $priority)
++    {
++        $url = $xml->addChild('url');
++        $url->addChild('loc', url($loc));
++        $url->addChild('lastmod', $lastmod->toAtomString());
++        $url->addChild('changefreq', $changefreq);
++        $url->addChild('priority', $priority);
++    }
++}
+diff --git a/platform/core/menu/src/Models/Menu.php b/platform/core/menu/src/Models/Menu.php
+index 7d6bdd6..9cecfc1 100644
+--- a/platform/core/menu/src/Models/Menu.php
++++ b/platform/core/menu/src/Models/Menu.php
+@@ -1,12 +1,14 @@
+ <?php
+ namespace Parrot\Menu\Models;
+ 
++use Illuminate\Database\Eloquent\Factories\HasFactory;
++use Parrot\Base\Models\BaseModel;
+ use Parrot\Base\Traits\ScopeEloquent;
+ use Parrot\Base\Traits\SpatieLogsActivity;
+-use Spatie\Permission\Models\Permission as Model;
+ 
+-class Menu extends Model
++class Menu extends BaseModel
+ {
++    use HasFactory;
+     use SpatieLogsActivity;
+     use ScopeEloquent;
+ 
+@@ -16,12 +18,42 @@ class Menu extends Model
+      * @var array<int, string>
+      */
+     protected $fillable = [
+-        'name',
++        'menu_id',
++        'parent_id',
++        'label',
++        'url',
++        'sort_order',
++        'status',
+     ];
+ 
+-    public function items()
++    protected static function newFactory()
+     {
+-        return $this->hasMany(MenuItem::class);
++        //return MenuFactory::new();
++    }
++
++    /**
++     * Get the child menu items for this menu.
++     *
++     * Defines a one-to-many relationship where this menu item can have multiple child menu items.
++     *
++     * @return \Illuminate\Database\Eloquent\Relations\HasMany
++     */
++    public function children()
++    {
++        return $this->hasMany(Menu::class, 'parent_id');
++    }
++
++    /**
++     * Get the parent menu item.
++     *
++     * Defines an inverse one-to-many relationship to the Menu model,
++     * indicating that this menu item may belong to a parent menu item.
++     *
++     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
++     */
++    public function parent()
++    {
++        return $this->belongsTo(Menu::class, 'parent_id');
+     }
+ 
+     /**
